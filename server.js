@@ -69,7 +69,11 @@ function saveAttendanceData() {
 // 登入 API
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
-  if (username === 'admin' && password === '123456') {
+  if (username === 'admin1' && password === 'KARATEDO') {
+    req.session.isAdmin = true;
+    return res.json({ success: true });
+  }
+  else if(username === 'admin2' && password === 'karatedo') {
     req.session.isAdmin = true;
     return res.json({ success: true });
   }
