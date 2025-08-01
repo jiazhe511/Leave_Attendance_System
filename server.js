@@ -1,3 +1,7 @@
+require('dotenv').config();
+const { Pool } = require('pg');
+
+const pool = new Pool(); // 自動從 .env 抓連線資訊
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
@@ -94,21 +98,35 @@ function requireAdmin(req, res, next) {
 }
 
 // 請假系統 API
-app.post('/submit', (req, res) => {
+app.post('/submit', async (req, res) => {
   const { name, region, date, reason } = req.body;
   if (!name || !region || !date || !reason) {
     return res.status(400).json({ message: '欄位不足' });
   }
-  if (!leaveRecords[name]) leaveRecords[name] = [];
-  leaveRecords[name].push({ region, date, reason });
-  saveLeaveData();
-  res.json({ message: '請假申請已收到' });
+
+  try {
+    await pool.query(
+      'INSERT INTO leaves (name, region, date, reason) VALUES ($1, $2, $3, $4)',
+      [name, region, date, reason]
+    );
+    res.json({ message: '請假申請已收到（資料已存入資料庫）' });
+  } catch (err) {
+    console.error('寫入資料庫失敗', err);
+    res.status(500).json({ message: '伺服器錯誤' });
+  }
 });
 
 // 取得請假資料
-app.get('/records', requireAdmin, (req, res) => {
-  res.json(leaveRecords);
+app.get('/records', requireAdmin, async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM leaves ORDER BY date DESC');
+    res.json(result.rows);
+  } catch (err) {
+    console.error('查詢資料失敗', err);
+    res.status(500).json({ message: '伺服器錯誤' });
+  }
 });
+
 
 // 刪除請假紀錄
 app.post('/delete', requireAdmin, (req, res) => {
@@ -191,3 +209,36 @@ app.post('/students/delete', requireAdmin, (req, res) => {
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
+
+const db = require('./db');
+
+async function initDB() {
+  try {
+    // 建立請假表格
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS leaves (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        region TEXT NOT NULL,
+        date DATE NOT NULL,
+        reason TEXT NOT NULL
+      )
+    `);
+
+    // 建立點名紀錄表格
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS attendance (
+        id SERIAL PRIMARY KEY,
+        region TEXT NOT NULL,
+        student_name TEXT NOT NULL,
+        date DATE NOT NULL
+      )
+    `);
+
+    console.log('✅ 資料表建立完成');
+  } catch (err) {
+    console.error('❌ 初始化資料庫失敗:', err);
+  }
+}
+
+initDB();
