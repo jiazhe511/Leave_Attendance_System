@@ -77,45 +77,11 @@
     <div class="mb-6">
       <label for="systemSelect" class="block text-gray-700 font-semibold mb-2">選擇功能系統</label>
       <select id="systemSelect" class="border p-2 rounded w-full max-w-xs">
-        <option value="leave">請假資料管理</option>
         <option value="attendance">點名系統</option>
         <option value="statistics">出席統計</option>
       </select>
     </div>
 
-    <!-- 請假資料管理區 -->
-    <div id="leaveSection">
-      <h2 class="text-xl font-bold mb-4 text-blue-800">📋 請假資料管理</h2>
-
-      <div class="mb-4">
-        <label for="filterRegion" class="font-semibold text-gray-700 mr-2">篩選地區：</label>
-        <select id="filterRegion" class="border border-gray-300 rounded px-2 py-1 max-w-xs">
-          <option value="">全部</option>
-          <option value="本部">本部道館</option>
-          <option value="清水">清水道館</option>
-          <option value="神岡">神岡道館</option>
-          <option value="大雅">大雅道館</option>
-          <option value="豐原">豐原道館</option>
-        </select>
-      </div>
-
-      <div id="recordCount" class="mb-4 text-gray-600"></div>
-
-      <div class="table-wrapper">
-        <table class="min-w-full border" id="recordTable">
-          <thead class="bg-blue-100 text-gray-700 font-semibold">
-            <tr>
-              <th class="border p-2">姓名</th>
-              <th class="border p-2">地區</th>
-              <th class="border p-2">請假日期</th>
-              <th class="border p-2">請假理由</th>
-              <th class="border p-2">操作</th>
-            </tr>
-          </thead>
-          <tbody class="text-gray-800"></tbody>
-        </table>
-      </div>
-    </div>
 
     <!-- 點名系統區 -->
     <div id="attendanceSection" style="display:none;">
@@ -212,11 +178,7 @@
   // 功能切換元素
   const systemSelect = document.getElementById('systemSelect');
 
-  // 請假系統元素
-  const leaveSection = document.getElementById('leaveSection');
-  const filterRegion = document.getElementById('filterRegion');
-  const recordTable = document.getElementById('recordTable').querySelector('tbody');
-  const recordCount = document.getElementById('recordCount');
+
 
   // 點名系統元素
   const attendanceSection = document.getElementById('attendanceSection');
@@ -237,7 +199,7 @@
 
 async function loadStudentsFromServer() {
   try {
-    const res = await fetch('/students', { credentials: 'include' });
+    const res = await fetch('https://script.google.com/macros/s/AKfycbykskbzkuXI0TVuZnZmS3kfVjLLMD1OFppPgjp8Mrs5PK9VPpaRxMOZpO6ESArkVMyx/exec?type=students', { credentials: 'include' });
     if (res.ok) {
       studentsByRegion = await res.json();
     }
@@ -253,17 +215,16 @@ async function loadStudentsFromServer() {
 async function checkLoginStatus() {
   try {
     await loadStudentsFromServer();
-  const res = await fetch('/records');
+  const res = await fetch('https://script.google.com/macros/s/AKfycbykskbzkuXI0TVuZnZmS3kfVjLLMD1OFppPgjp8Mrs5PK9VPpaRxMOZpO6ESArkVMyx/exec?type=attendance');
     if (res.ok) {
       loginArea.style.display = 'none';
       adminArea.classList.remove('hidden');
 
-      // ✅ 恢復上次選擇的系統功能（預設為 leave）
-      const lastSystem = localStorage.getItem('lastSystem') || 'leave';
+      // ✅ 恢復上次選擇的系統功能（預設為 attendance）
+      const lastSystem = localStorage.getItem('lastSystem') || 'attendance';
       systemSelect.value = lastSystem;
       systemSelect.dispatchEvent(new Event('change')); // 觸發頁面切換
 
-      loadRecords(); // 仍要載入請假資料（即使不在那個頁籤）
     } else {
       loginArea.style.display = 'block';
       adminArea.classList.add('hidden');
@@ -282,15 +243,14 @@ async function checkLoginStatus() {
     const password = document.getElementById('password').value.trim();
 
     try {
-      const res = await fetch('/login', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({ username, password })
-      });
+    const res = await fetch('https://script.google.com/macros/s/AKfycbykskbzkuXI0TVuZnZmS3kfVjLLMD1OFppPgjp8Mrs5PK9VPpaRxMOZpO6ESArkVMyx/exec', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'login', username, password })
+    });
       if (res.ok) {
         loginArea.style.display = 'none';
         adminArea.classList.remove('hidden');
-        loadRecords();
       } else {
         const data = await res.json();
         loginMessage.textContent = data.message || '登入失敗';
@@ -315,7 +275,6 @@ async function checkLoginStatus() {
   // 👉 儲存目前選擇到 localStorage
   localStorage.setItem('lastSystem', val);
 
-  leaveSection.style.display = val === 'leave' ? 'block' : 'none';
   attendanceSection.style.display = val === 'attendance' ? 'block' : 'none';
   statisticsSection.style.display = val === 'statistics' ? 'block' : 'none';
   attendanceMessage.textContent = '';
@@ -324,67 +283,6 @@ async function checkLoginStatus() {
     renderGlobalStatisticsReminder();
   }
 });
-  // ----------------- 請假資料管理 -----------------
-  filterRegion.addEventListener('change', () => loadRecords(filterRegion.value));
-  async function deleteRecord(name, index) {
-    if (confirm(`確定要刪除 ${name} 的第 ${index + 1} 筆請假資料嗎？`)) {
-      await fetch('/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, index }),
-      });
-      loadRecords(filterRegion.value);
-    }
-  }
-
-  async function editRecord(name, index) {
-    const region = prompt('請輸入新的地區：');
-    const date = prompt('請輸入新的日期（yyyy-mm-dd）：');
-    const reason = prompt('請輸入新的請假理由：');
-    if (region && date && reason) {
-      await fetch('/edit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, index, newRecord: { region, date, reason } }),
-      });
-      loadRecords(filterRegion.value);
-    }
-  }
-  // 載入請假資料，並初始化系統
-  async function loadRecords(regionFilter = '') {
-    await loadStudentsFromServer();
-  const res = await fetch('/records');
-    if (!res.ok) {
-      alert('請先登入');
-      logoutBtn.click();
-      return;
-    }
-    const data = await res.json();
-    recordTable.innerHTML = '';
-    let total = 0;
-
-    for (const name in data) {
-      const records = data[name];
-      const filtered = regionFilter ? records.filter(r => r.region === regionFilter) : records;
-      total += filtered.length;
-      filtered.forEach((r, idx) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-          <td class="border p-2">${name}</td>
-          <td class="border p-2">${r.region}</td>
-          <td class="border p-2">${r.date}</td>
-          <td class="border p-2">${r.reason}</td>
-          <td class="border p-2 space-x-2 text-center">
-            <button onclick="editRecord('${name}', ${idx})" class="bg-yellow-400 text-white px-2 py-1 rounded">編輯</button>
-            <button onclick="deleteRecord('${name}', ${idx})" class="bg-red-500 text-white px-2 py-1 rounded">刪除</button>
-          </td>
-        `;
-        recordTable.appendChild(tr);
-      });
-    }
-    recordCount.textContent = `目前共有 ${total} 筆請假紀錄，${regionFilter ? regionFilter + " 地區" : "所有地區"}。`;
-  }
-
 // ----------------- 點名系統 -----------------
 
 // 日期輸入初始值設定 (預設今天起算7天)
@@ -433,7 +331,7 @@ function getDatesInRange(startStr, endStr) {
 // 從後端取得指定區域的點名資料
 async function fetchAttendanceRecords(region) {
   try {
-    const res = await fetch('/attendance', {
+    const res = await fetch('https://script.google.com/macros/s/AKfycbykskbzkuXI0TVuZnZmS3kfVjLLMD1OFppPgjp8Mrs5PK9VPpaRxMOZpO6ESArkVMyx/exec?type=attendance', {
       cache: 'no-cache',      // 防快取
       credentials: 'include', // 如果需要帶 cookie/session
     });
@@ -508,10 +406,10 @@ async function renderAttendanceHistory(region) {
 deleteBtn.addEventListener('click', async () => {
   if (confirm(`確定刪除學生 ${student} 嗎？此動作會移除該學生的所有點名資料。`)) {
     try {
-      const res = await fetch('/students/delete', {
+      const res = await fetch('https://script.google.com/macros/s/AKfycbykskbzkuXI0TVuZnZmS3kfVjLLMD1OFppPgjp8Mrs5PK9VPpaRxMOZpO6ESArkVMyx/exec', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ region, studentName: student })
+        body: JSON.stringify({ type: 'saveAttendance',  type: 'deleteStudent',  type: 'addStudent',  region, studentName: student })
       });
       const data = await res.json();
       if (res.ok) {
@@ -627,7 +525,7 @@ saveAttendanceBtn.addEventListener('click', async () => {
       region,
       attendanceRecords: attendanceRecords[region] || {}
     };
-    const res = await fetch('/attendance', {
+    const res = await fetch('https://script.google.com/macros/s/AKfycbykskbzkuXI0TVuZnZmS3kfVjLLMD1OFppPgjp8Mrs5PK9VPpaRxMOZpO6ESArkVMyx/exec?type=attendance', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -810,7 +708,7 @@ async function renderGlobalStatisticsReminder() {
   const globalReminder = document.getElementById("globalStatisticsReminder");
 
   try {
-    const allData = await fetch("/attendance", { credentials: 'include' }).then(r => r.json());
+    const allData = await fetch('https://script.google.com/macros/s/AKfycbykskbzkuXI0TVuZnZmS3kfVjLLMD1OFppPgjp8Mrs5PK9VPpaRxMOZpO6ESArkVMyx/exec?type=attendance', { credentials: 'include' }).then(r => r.json());
     const mode = document.getElementById('attendanceDisplayMode')?.value || 'current';
 
     if (mode === 'all') {
@@ -883,7 +781,6 @@ async function renderGlobalStatisticsReminder() {
 systemSelect.addEventListener("change", () => {
   const val = systemSelect.value;
 
-  leaveSection.style.display = val === 'leave' ? 'block' : 'none';
   attendanceSection.style.display = val === 'attendance' ? 'block' : 'none';
   statisticsSection.style.display = val === 'statistics' ? 'block' : 'none';
   attendanceMessage.textContent = '';
@@ -917,10 +814,10 @@ addStudentBtn.addEventListener('click', async () => {
   }
 
   try {
-    const res = await fetch('/students/add', {
+    const res = await fetch('https://script.google.com/macros/s/AKfycbykskbzkuXI0TVuZnZmS3kfVjLLMD1OFppPgjp8Mrs5PK9VPpaRxMOZpO6ESArkVMyx/exec', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ region, studentName: name })
+      body: JSON.stringify({ type: 'saveAttendance',  type: 'deleteStudent',  type: 'addStudent',  region, studentName: name })
     });
 
     const data = await res.json();
