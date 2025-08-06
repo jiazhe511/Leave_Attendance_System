@@ -1,10 +1,14 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>管理後台（請假與點名系統）</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>點名管理系統</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // ✅ 將此處改為你的 Google Apps Script 網址
+    const BASE_URL = "https://script.google.com/macros/s/AKfycbyddR02Hu4kzl476CfaFIVOFpw8Lby932JUzdliFBmWGsg7-wGbTHXVnnwvI8ZWEybb/exec";
+  </script>
   <style>
     /* 點名表格基本樣式 */
     #attendanceHistoryTable {
@@ -54,7 +58,7 @@
 </head>
 <body class="bg-gray-100 min-h-screen p-6">
 
-  <!-- 登入區 -->
+  <!-- 🔐 登入區 -->
   <div id="loginArea" class="max-w-md mx-auto bg-white rounded-xl shadow-lg p-6">
     <h2 class="text-xl font-bold mb-4 text-center">管理者登入</h2>
     <form id="loginForm" class="space-y-4">
@@ -65,15 +69,14 @@
     </form>
   </div>
 
-  <!-- 管理主區 -->
+  <!-- 🔧 系統主區 -->
   <div id="adminArea" class="max-w-7xl mx-auto bg-white rounded-xl shadow-lg p-6 hidden">
-
     <div class="flex justify-between items-center mb-4">
-      <h1 class="text-2xl font-bold text-gray-800">管理後台系統</h1>
+      <h1 class="text-2xl font-bold text-gray-800">點名管理系統</h1>
       <button id="logoutBtn" class="bg-red-500 text-white px-4 py-1 rounded hover:bg-red-600">登出</button>
     </div>
 
-    <!-- 功能選擇切換 -->
+    <!-- 📋 系統功能選擇 -->
     <div class="mb-6">
       <label for="systemSelect" class="block text-gray-700 font-semibold mb-2">選擇功能系統</label>
       <select id="systemSelect" class="border p-2 rounded w-full max-w-xs">
@@ -215,7 +218,8 @@ async function loadStudentsFromServer() {
 async function checkLoginStatus() {
   try {
     await loadStudentsFromServer();
-  const res = await fetch('https://script.google.com/macros/s/AKfycbykskbzkuXI0TVuZnZmS3kfVjLLMD1OFppPgjp8Mrs5PK9VPpaRxMOZpO6ESArkVMyx/exec?type=attendance');
+
+    const res = await fetch(`${BASE_URL}?type=attendance`);
     if (res.ok) {
       loginArea.style.display = 'none';
       adminArea.classList.remove('hidden');
@@ -224,64 +228,55 @@ async function checkLoginStatus() {
       const lastSystem = localStorage.getItem('lastSystem') || 'attendance';
       systemSelect.value = lastSystem;
       systemSelect.dispatchEvent(new Event('change')); // 觸發頁面切換
-
     } else {
       loginArea.style.display = 'block';
       adminArea.classList.add('hidden');
     }
-  } catch {
+  } catch (err) {
+    console.error('登入檢查失敗', err);
     loginArea.style.display = 'block';
     adminArea.classList.add('hidden');
   }
 }
 
+loginForm.addEventListener('submit', async e => {
+  e.preventDefault();
+  loginMessage.textContent = '';
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value.trim();
 
-  loginForm.addEventListener('submit', async e => {
-    e.preventDefault();
-    loginMessage.textContent = '';
-    const username = document.getElementById('username').value.trim();
-    const password = document.getElementById('password').value.trim();
-
-    try {
-    const res = await fetch('https://script.google.com/macros/s/AKfycbykskbzkuXI0TVuZnZmS3kfVjLLMD1OFppPgjp8Mrs5PK9VPpaRxMOZpO6ESArkVMyx/exec', {
+  try {
+    const res = await fetch(BASE_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'login', username, password })
     });
-      if (res.ok) {
-        loginArea.style.display = 'none';
-        adminArea.classList.remove('hidden');
-      } else {
-        const data = await res.json();
-        loginMessage.textContent = data.message || '登入失敗';
-      }
-    } catch {
-      loginMessage.textContent = '網路錯誤';
+
+    const data = await res.json();
+
+    if (data.success) {
+      loginArea.style.display = 'none';
+      adminArea.classList.remove('hidden');
+
+      // ✅ 自動切換功能頁面
+      const lastSystem = localStorage.getItem('lastSystem') || 'attendance';
+      systemSelect.value = lastSystem;
+      systemSelect.dispatchEvent(new Event('change'));
+    } else {
+      loginMessage.textContent = data.message || '登入失敗';
     }
-  });
-
-  logoutBtn.addEventListener('click', async () => {
-    await fetch('/logout', { method: 'POST' });
-    adminArea.classList.add('hidden');
-    loginArea.style.display = 'block';
-    loginMessage.textContent = '';
-    loginForm.reset();
-  });
-
-  // ----------------- 功能系統切換 -----------------
- systemSelect.addEventListener("change", () => {
-  const val = systemSelect.value;
-
-  // 👉 儲存目前選擇到 localStorage
-  localStorage.setItem('lastSystem', val);
-
-  attendanceSection.style.display = val === 'attendance' ? 'block' : 'none';
-  statisticsSection.style.display = val === 'statistics' ? 'block' : 'none';
-  attendanceMessage.textContent = '';
-
-  if (val === 'statistics') {
-    renderGlobalStatisticsReminder();
+  } catch (err) {
+    console.error('登入錯誤', err);
+    loginMessage.textContent = '⚠️ 網路錯誤，請稍後再試';
   }
+});
+
+logoutBtn.addEventListener('click', () => {
+  // ✅ 本地登出（因 GAS 無提供 /logout，僅重設畫面）
+  adminArea.classList.add('hidden');
+  loginArea.style.display = 'block';
+  loginMessage.textContent = '';
+  loginForm.reset();
 });
 // ----------------- 點名系統 -----------------
 
