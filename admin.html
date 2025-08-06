@@ -1,850 +1,299 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>點名管理系統</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    // ✅ 將此處改為你的 Google Apps Script 網址
-    const BASE_URL = "https://script.google.com/macros/s/AKfycbwXV2d3Z1Vst2_xck6LbqqctT9HLGDz8oPcXA97YlY3E2sMWFBZcxLvvoSwKZG6098S/exec";
-  </script>
-  <style>
-    /* 點名表格基本樣式 */
-    #attendanceHistoryTable {
-      border-collapse: collapse;
-      width: 100%;
-    }
-    #attendanceHistoryTable th,
-    #attendanceHistoryTable td {
-      border: 1px solid #ccc;
-      padding: 6px 10px;
-      text-align: center;
-      user-select: none;
-      white-space: nowrap;
-    }
-
-    /* 點名表頭固定 */
-    #attendanceHistoryTable th {
-      position: sticky;
-      top: 0;
-      background-color: #d1fae5;
-      z-index: 20;
-    }
-
-    /* 點名第一欄固定 */
-    #attendanceHistoryTable th:first-child,
-    #attendanceHistoryTable td:first-child {
-      position: sticky;
-      left: 0;
-      background-color: white;
-      z-index: 15;
-      min-width: 120px;
-      max-width: 120px;
-      text-align: left;
-      font-weight: 600;
-    }
-
-    /* 點名表格容器，可橫向滾動 */
-    .table-wrapper {
-      overflow: auto;              /* 支援橫向與縱向滾動 */
-      max-height: 500px;           /* 控制顯示區塊高度 */
-      max-width: 100%;
-      border: 1px solid #ddd;
-      border-radius: 6px;
-    }
-
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>點名系統</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 20px; max-width: 600px; }
+  label, button { margin-top: 10px; display: block; }
+  select, input[type="text"], input[type="date"] { width: 100%; padding: 6px; margin-top: 4px; }
+  .student-list { max-height: 300px; overflow-y: auto; border: 1px solid #ccc; padding: 8px; margin-top: 10px; }
+  .student-item { display: flex; align-items: center; margin-bottom: 4px; }
+  .student-item input[type="checkbox"] { margin-right: 8px; }
+  .flex-row { display: flex; gap: 10px; }
+  .flex-row > * { flex: 1; }
+  .btn-inline { display: inline-block; margin-left: 6px; }
+  .small-input { width: auto; display: inline-block; }
+</style>
 </head>
-<body class="bg-gray-100 min-h-screen p-6">
+<body>
 
-  <!-- 🔐 登入區 -->
-  <div id="loginArea" class="max-w-md mx-auto bg-white rounded-xl shadow-lg p-6">
-    <h2 class="text-xl font-bold mb-4 text-center">管理者登入</h2>
-    <form id="loginForm" class="space-y-4">
-      <input type="text" id="username" placeholder="帳號" class="w-full border p-2 rounded" required />
-      <input type="password" id="password" placeholder="密碼" class="w-full border p-2 rounded" required />
-      <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">登入</button>
-      <div id="loginMessage" class="text-red-600 mt-2 text-center"></div>
-    </form>
-  </div>
+<h2>點名系統</h2>
 
-  <!-- 🔧 系統主區 -->
-  <div id="adminArea" class="max-w-7xl mx-auto bg-white rounded-xl shadow-lg p-6 hidden">
-    <div class="flex justify-between items-center mb-4">
-      <h1 class="text-2xl font-bold text-gray-800">點名管理系統</h1>
-      <button id="logoutBtn" class="bg-red-500 text-white px-4 py-1 rounded hover:bg-red-600">登出</button>
-    </div>
+<!-- 地區選擇 -->
+<label for="regionSelect">選擇地區</label>
+<div class="flex-row">
+  <select id="regionSelect"></select>
+  <input type="text" id="newRegionInput" placeholder="新增地區名稱" />
+  <button id="btnAddRegion">新增地區</button>
+  <button id="btnDeleteRegion">刪除選中地區</button>
+</div>
 
-    <!-- 📋 系統功能選擇 -->
-    <div class="mb-6">
-      <label for="systemSelect" class="block text-gray-700 font-semibold mb-2">選擇功能系統</label>
-      <select id="systemSelect" class="border p-2 rounded w-full max-w-xs">
-        <option value="attendance">點名系統</option>
-        <option value="statistics">出席統計</option>
-      </select>
-    </div>
+<!-- 學生管理 -->
+<label for="studentList">學生名單</label>
+<div class="flex-row">
+  <input type="text" id="newStudentInput" placeholder="新增學生姓名" />
+  <button id="btnAddStudent">新增學生</button>
+  <button id="btnDeleteStudents">刪除選中學生</button>
+</div>
 
+<div id="studentList" class="student-list"></div>
 
-    <!-- 點名系統區 -->
-    <div id="attendanceSection" style="display:none;">
-      <h2 class="text-xl font-bold mb-4 text-green-800">📝 點名系統</h2>
+<!-- 日期範圍 -->
+<label for="startDate">起始日期</label>
+<input type="date" id="startDate" />
 
-      
-      <div class="mb-4 flex items-center space-x-4 max-w-xs">
-        <div>
-          <label for="startDate" class="block font-semibold mb-1">起始日期</label>
-          <input type="date" id="startDate" class="border p-2 rounded w-full" />
-        </div>
-        <div>
-          <label for="endDate" class="block font-semibold mb-1">結束日期</label>
-          <input type="date" id="endDate" class="border p-2 rounded w-full" />
-        </div>
-      </div>
-      <div class="mb-4 flex items-center space-x-2 max-w-xs">
-        <input type="text" id="newStudentName" placeholder="學生姓名" class="border p-2 rounded flex-grow" />
-        <select id="newStudentRegion" class="border p-2 rounded w-32">
-          <option value="">選擇地區</option>
-          <option value="本部">本部道館</option>
-          <option value="清水">清水道館</option>
-          <option value="神岡">神岡道館</option>
-          <option value="大雅">大雅道館</option>
-          <option value="豐原">豐原道館</option>
-        </select>
-        
-    </div>
-    <button id="addStudentBtn" class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">新增學生</button>
+<label for="endDate">結束日期</label>
+<input type="date" id="endDate" />
 
+<button id="btnSubmitAttendance" style="margin-top: 15px;">送出點名</button>
 
-      <div class="mb-4 max-w-xs">
-        <label for="attendanceRegion" class="block font-semibold mb-2">選擇地區</label>
-        <select id="attendanceRegion" class="border p-2 rounded w-full">
-          <option value="">請選擇</option>
-          <option value="本部">本部道館</option>
-          <option value="清水">清水道館</option>
-          <option value="神岡">神岡道館</option>
-          <option value="大雅">大雅道館</option>
-          <option value="豐原">豐原道館</option>
-        </select>
-      </div>
-
-      <div class="table-wrapper mb-4">
-        <table id="attendanceHistoryTable" class="min-w-full border text-center"></table>
-      </div>
-
-      <button id="saveAttendanceBtn" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700" disabled>
-        儲存點名
-      </button>
-
-      <div id="attendanceMessage" class="mt-4 font-semibold"></div>
-    </div>
-
-    <!-- 出席統計區 -->
-    <div id="statisticsSection" style="display:none;">
-      <h2 class="text-xl font-bold mb-4 text-purple-800">📊 出席統計</h2>
-      <div id="globalStatisticsReminder" class="mb-4 p-3 bg-red-100 border border-red-400 text-red-800 rounded hidden"></div>
-      <div class="mb-4 max-w-xs">
-        <label for="statisticsRegion" class="block font-semibold mb-2">選擇地區</label>
-        <select id="statisticsRegion" class="border p-2 rounded w-full">
-          <option value="">請選擇</option>
-          <option value="本部">本部道館</option>
-          <option value="清水">清水道館</option>
-          <option value="神岡">神岡道館</option>
-          <option value="大雅">大雅道館</option>
-          <option value="豐原">豐原道館</option>
-        </select>
-      </div>
-      <div id="statisticsReminder"></div>
-      <div class="table-wrapper">
-        <table class="min-w-full border text-center" id="statisticsTable">
-          <thead class="bg-purple-100">
-            <tr>
-              <th class="border px-2 py-1">姓名</th>
-              <th class="border px-2 py-1">出席日期</th>
-              <th class="border px-2 py-1">出席次數</th>
-            </tr>
-          </thead>
-          <tbody class="text-gray-800"></tbody>
-        </table>
-      </div>
-    </div>
-  </div>
+<div id="message" style="margin-top:15px; color: green;"></div>
 
 <script>
-  // 登入區元素
-  const loginArea = document.getElementById('loginArea');
-  const adminArea = document.getElementById('adminArea');
-  const loginForm = document.getElementById('loginForm');
-  const loginMessage = document.getElementById('loginMessage');
-  const logoutBtn = document.getElementById('logoutBtn');
+  const scriptUrl = "你的 Google Apps Script Web App URL 替換在這";
 
-  // 功能切換元素
-  const systemSelect = document.getElementById('systemSelect');
+  const regionSelect = document.getElementById("regionSelect");
+  const newRegionInput = document.getElementById("newRegionInput");
+  const btnAddRegion = document.getElementById("btnAddRegion");
+  const btnDeleteRegion = document.getElementById("btnDeleteRegion");
 
+  const studentListDiv = document.getElementById("studentList");
+  const newStudentInput = document.getElementById("newStudentInput");
+  const btnAddStudent = document.getElementById("btnAddStudent");
+  const btnDeleteStudents = document.getElementById("btnDeleteStudents");
 
+  const startDateInput = document.getElementById("startDate");
+  const endDateInput = document.getElementById("endDate");
 
-  // 點名系統元素
-  const attendanceSection = document.getElementById('attendanceSection');
-  const attendanceRegion = document.getElementById('attendanceRegion');
-  const attendanceHistoryTable = document.getElementById('attendanceHistoryTable');
-  const startDateInput = document.getElementById('startDate');
-  const endDateInput = document.getElementById('endDate');
-  const saveAttendanceBtn = document.getElementById('saveAttendanceBtn');
-  const attendanceMessage = document.getElementById('attendanceMessage');
+  const btnSubmitAttendance = document.getElementById("btnSubmitAttendance");
 
-  // 出席統計元素
-  const statisticsSection = document.getElementById('statisticsSection');
-  const statisticsRegion = document.getElementById('statisticsRegion');
-  const statisticsTableBody = document.getElementById('statisticsTable').querySelector('tbody');
+  const messageDiv = document.getElementById("message");
 
-  // 範例學生名單
-  let studentsByRegion = {};
-
-async function loadStudentsFromServer() {
-  try {
-    const res = await fetch('https://script.google.com/macros/s/AKfycbykskbzkuXI0TVuZnZmS3kfVjLLMD1OFppPgjp8Mrs5PK9VPpaRxMOZpO6ESArkVMyx/exec?type=students', { credentials: 'include' });
-    if (res.ok) {
-      studentsByRegion = await res.json();
-    }
-  } catch (e) {
-    console.error('載入學生名單失敗', e);
+  // 取得今天日期字串 YYYY-MM-DD
+  function todayStr() {
+    const d = new Date();
+    return d.toISOString().slice(0, 10);
   }
-}
 
-  // 紀錄點名資料 (region -> student -> [date])
-  let attendanceRecords = {};
+  startDateInput.value = todayStr();
+  endDateInput.value = todayStr();
 
-  // ----------------- 登入相關 -----------------
-async function checkLoginStatus() {
-  try {
-    await loadStudentsFromServer();
-
-    const res = await fetch(`${BASE_URL}?type=attendance`);
-    if (res.ok) {
-      loginArea.style.display = 'none';
-      adminArea.classList.remove('hidden');
-
-      // ✅ 恢復上次選擇的系統功能（預設為 attendance）
-      const lastSystem = localStorage.getItem('lastSystem') || 'attendance';
-      systemSelect.value = lastSystem;
-      systemSelect.dispatchEvent(new Event('change')); // 觸發頁面切換
+  // 載入地區清單
+  async function loadRegions() {
+    const res = await fetch(scriptUrl + "?type=regions");
+    const regions = await res.json();
+    regionSelect.innerHTML = "";
+    if(Array.isArray(regions)) {
+      regions.forEach(r => {
+        const option = document.createElement("option");
+        option.value = r;
+        option.textContent = r;
+        regionSelect.appendChild(option);
+      });
+    }
+    if(regionSelect.options.length > 0) {
+      regionSelect.selectedIndex = 0;
+      loadStudents(regionSelect.value);
     } else {
-      loginArea.style.display = 'block';
-      adminArea.classList.add('hidden');
+      studentListDiv.innerHTML = "<i>尚無地區，請新增地區</i>";
     }
-  } catch (err) {
-    console.error('登入檢查失敗', err);
-    loginArea.style.display = 'block';
-    adminArea.classList.add('hidden');
   }
-}
 
-loginForm.addEventListener('submit', async e => {
-  e.preventDefault();
-  loginMessage.textContent = '';
-  const username = document.getElementById('username').value.trim();
-  const password = document.getElementById('password').value.trim();
-
-  try {
-    const res = await fetch(BASE_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'login', username, password })
+  // 新增地區
+  btnAddRegion.addEventListener("click", async () => {
+    const newRegion = newRegionInput.value.trim();
+    if(!newRegion) return alert("請輸入地區名稱");
+    const res = await fetch(scriptUrl, {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({type:"addRegion", region: newRegion})
     });
-
     const data = await res.json();
-
-    if (data.success) {
-      loginArea.style.display = 'none';
-      adminArea.classList.remove('hidden');
-
-      // ✅ 自動切換功能頁面
-      const lastSystem = localStorage.getItem('lastSystem') || 'attendance';
-      systemSelect.value = lastSystem;
-      systemSelect.dispatchEvent(new Event('change'));
+    if(data.success){
+      messageDiv.textContent = data.message;
+      newRegionInput.value = "";
+      await loadRegions();
     } else {
-      loginMessage.textContent = data.message || '登入失敗';
+      alert("新增地區失敗：" + data.message);
     }
-  } catch (err) {
-    console.error('登入錯誤', err);
-    loginMessage.textContent = '⚠️ 網路錯誤，請稍後再試';
-  }
-});
-
-logoutBtn.addEventListener('click', () => {
-  // ✅ 本地登出（因 GAS 無提供 /logout，僅重設畫面）
-  adminArea.classList.add('hidden');
-  loginArea.style.display = 'block';
-  loginMessage.textContent = '';
-  loginForm.reset();
-});
-// ----------------- 點名系統 -----------------
-
-// 日期輸入初始值設定 (預設今天起算7天)
-function setDefaultDates() {
-  const savedStart = sessionStorage.getItem('attendanceStartDate');
-  const savedEnd = sessionStorage.getItem('attendanceEndDate');
-
-  if (savedStart && savedEnd) {
-    startDateInput.value = savedStart;
-    endDateInput.value = savedEnd;
-  } else {
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, '0');
-    const dd = String(today.getDate()).padStart(2, '0');
-    const startStr = `${yyyy}-${mm}-${dd}`;
-
-    const endDate = new Date(today);
-    endDate.setDate(endDate.getDate() + 6);
-    const endY = endDate.getFullYear();
-    const endM = String(endDate.getMonth() + 1).padStart(2, '0');
-    const endD = String(endDate.getDate()).padStart(2, '0');
-    const endStr = `${endY}-${endM}-${endD}`;
-
-    startDateInput.value = startStr;
-    endDateInput.value = endStr;
-  }
-}
-
-
-
-
-// 取得日期區間內所有日期字串
-function getDatesInRange(startStr, endStr) {
-  const dates = [];
-  const start = new Date(startStr);
-  const end = new Date(endStr);
-  if (start > end) return dates;
-
-  for (let dt = new Date(start); dt <= end; dt.setDate(dt.getDate() + 1)) {
-    dates.push(dt.toISOString().slice(0, 10));
-  }
-  return dates;
-}
-
-// 從後端取得指定區域的點名資料
-async function fetchAttendanceRecords(region) {
-  try {
-    const res = await fetch('https://script.google.com/macros/s/AKfycbykskbzkuXI0TVuZnZmS3kfVjLLMD1OFppPgjp8Mrs5PK9VPpaRxMOZpO6ESArkVMyx/exec?type=attendance', {
-      cache: 'no-cache',      // 防快取
-      credentials: 'include', // 如果需要帶 cookie/session
-    });
-    if (!res.ok) throw new Error('讀取點名資料失敗');
-    const data = await res.json();
-    return data[region] || {};
-  } catch (e) {
-    console.error(e);
-    return {};
-  }
-}
-
-
-// 渲染點名表格（X軸日期，Y軸學生，格子點擊切換）
-async function renderAttendanceHistory(region) {
-  attendanceHistoryTable.innerHTML = '';
-
-  const students = studentsByRegion[region] || [];
-  if (students.length === 0) {
-    attendanceHistoryTable.innerHTML = '<tr><td>無學生資料</td></tr>';
-    return;
-  }
-
-  const startStr = startDateInput.value;
-  const endStr = endDateInput.value;
-  const dates = getDatesInRange(startStr, endStr);
-  if (dates.length === 0) {
-    attendanceHistoryTable.innerHTML = '<tr><td>起始日期不能晚於結束日期</td></tr>';
-    return;
-  }
-
-  // 載入點名資料
-  attendanceRecords[region] = await fetchAttendanceRecords(region);
-  const regionData = attendanceRecords[region] || {};
-
-  // 表頭
-  const thead = document.createElement('thead');
-  const trHead = document.createElement('tr');
-  const thEmpty = document.createElement('th');
-  thEmpty.textContent = '';
-  thEmpty.className = 'border px-2 py-1 bg-green-100 sticky top-0 z-10';
-  trHead.appendChild(thEmpty);
-
-  dates.forEach(dateStr => {
-    const th = document.createElement('th');
-    th.textContent = dateStr;
-    th.className = 'border px-2 py-1 bg-green-100 sticky top-0 z-10';
-    trHead.appendChild(th);
   });
-  thead.appendChild(trHead);
-  attendanceHistoryTable.appendChild(thead);
 
-  // 表身
-  const tbody = document.createElement('tbody');
-  students.forEach(student => {
-    const tr = document.createElement('tr');
-    const tdName = document.createElement('td');
-    tdName.className = 'border px-2 py-1 font-semibold text-left sticky left-0 bg-white';
+  // 刪除地區
+  btnDeleteRegion.addEventListener("click", async () => {
+    const selectedRegion = regionSelect.value;
+    if(!selectedRegion) return alert("請選擇地區");
+    if(!confirm(`確定刪除地區 ${selectedRegion}？此操作不可恢復`)) return;
+    const res = await fetch(scriptUrl, {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({type:"deleteRegion", region: selectedRegion})
+    });
+    const data = await res.json();
+    if(data.success){
+      messageDiv.textContent = data.message;
+      await loadRegions();
+    } else {
+      alert("刪除地區失敗：" + data.message);
+    }
+  });
 
-    // 清空 textContent，改用 appendChild 方式建立內容
-    tdName.textContent = '';
+  // 載入學生名單
+  async function loadStudents(region) {
+    if(!region) return;
+    const res = await fetch(scriptUrl + "?type=students");
+    const allStudents = await res.json();
+    const students = allStudents[region] || [];
+    studentListDiv.innerHTML = "";
+    if(students.length === 0) {
+      studentListDiv.innerHTML = "<i>此地區尚無學生，請新增學生</i>";
+    }
+    students.forEach(name => {
+      const div = document.createElement("div");
+      div.className = "student-item";
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.value = name;
+      div.appendChild(checkbox);
+      div.appendChild(document.createTextNode(name));
+      studentListDiv.appendChild(div);
+    });
+  }
 
-    // 學生姓名文字節點
-    const nameText = document.createTextNode(student);
-    tdName.appendChild(nameText);
+  regionSelect.addEventListener("change", () => {
+    loadStudents(regionSelect.value);
+  });
 
-    // 新增「刪除學生」按鈕
-    const deleteBtn = document.createElement('button');
-    deleteBtn.textContent = '刪除學生';
-    deleteBtn.className = 'text-red-600 text-xs ml-2 px-1 py-0.5 rounded border border-red-600 hover:bg-red-600 hover:text-white cursor-pointer';
+  // 新增學生
+  btnAddStudent.addEventListener("click", async () => {
+    const region = regionSelect.value;
+    if(!region) return alert("請先選擇地區");
+    const studentName = newStudentInput.value.trim();
+    if(!studentName) return alert("請輸入學生姓名");
+    const res = await fetch(scriptUrl, {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({type:"addStudent", region, studentName})
+    });
+    const data = await res.json();
+    if(data.success){
+      messageDiv.textContent = data.message;
+      newStudentInput.value = "";
+      await loadStudents(region);
+    } else {
+      alert("新增學生失敗：" + data.message);
+    }
+  });
 
-deleteBtn.addEventListener('click', async () => {
-  if (confirm(`確定刪除學生 ${student} 嗎？此動作會移除該學生的所有點名資料。`)) {
-    try {
-      const res = await fetch('https://script.google.com/macros/s/AKfycbykskbzkuXI0TVuZnZmS3kfVjLLMD1OFppPgjp8Mrs5PK9VPpaRxMOZpO6ESArkVMyx/exec', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: 'saveAttendance',  type: 'deleteStudent',  type: 'addStudent',  region, studentName: student })
+  // 刪除學生
+  btnDeleteStudents.addEventListener("click", async () => {
+    const region = regionSelect.value;
+    if(!region) return alert("請先選擇地區");
+    const checkedBoxes = [...studentListDiv.querySelectorAll("input[type=checkbox]:checked")];
+    if(checkedBoxes.length === 0) return alert("請選擇要刪除的學生");
+    if(!confirm(`確定刪除選中的學生？此操作不可恢復`)) return;
+
+    for(const cb of checkedBoxes){
+      const studentName = cb.value;
+      const res = await fetch(scriptUrl, {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({type:"deleteStudent", region, studentName})
       });
       const data = await res.json();
-      if (res.ok) {
-        const idx = studentsByRegion[region].indexOf(student);
-        if (idx !== -1) studentsByRegion[region].splice(idx, 1);
-        if (attendanceRecords[region]) {
-          delete attendanceRecords[region][student];
-        }
-        renderAttendanceHistory(region);
-      } else {
-        alert(data.message || '刪除失敗');
+      if(!data.success){
+        alert(`刪除學生 ${studentName} 失敗：${data.message}`);
+        return;
       }
-    } catch (e) {
-      alert('刪除失敗，請稍後再試');
-      console.error(e);
     }
-  }
-});
+    messageDiv.textContent = "學生刪除成功";
+    await loadStudents(region);
+  });
 
+  // 點名送出
+  btnSubmitAttendance.addEventListener("click", async () => {
+    const region = regionSelect.value;
+    if(!region) return alert("請先選擇地區");
 
-    tdName.appendChild(deleteBtn);
+    const startDate = startDateInput.value;
+    const endDate = endDateInput.value;
+    if(!startDate || !endDate) return alert("請選擇日期區間");
+    if(startDate > endDate) return alert("起始日期不可大於結束日期");
 
-    tr.appendChild(tdName);
+    // 取得選中學生
+    const checkedBoxes = [...studentListDiv.querySelectorAll("input[type=checkbox]:checked")];
+    if(checkedBoxes.length === 0) return alert("請選擇至少一位學生點名");
 
-    // 取得學生出席資料
-    let record = regionData[student];
-    if (!record || !Array.isArray(record.dates)) {
-      record = { dates: [] };
-    }
-
-    const attendedDates = record.dates;
-
-    dates.forEach(dateStr => {
-      const td = document.createElement('td');
-      td.className = 'border px-2 py-1 cursor-pointer select-none user-select-none';
-
-      if (attendedDates.includes(dateStr)) {
-        td.classList.add('bg-green-400');
-        td.textContent = '✔';
+    // 組裝日期區間的日期陣列
+    function getDatesInRange(start, end) {
+      const arr = [];
+      let dt = new Date(start);
+      const dtEnd = new Date(end);
+      while(dt <= dtEnd){
+        arr.push(dt.toISOString().slice(0,10));
+        dt.setDate(dt.getDate() + 1);
       }
+      return arr;
+    }
+    const dateRange = getDatesInRange(startDate, endDate);
 
-      td.addEventListener('click', () => {
-        const idx = attendedDates.indexOf(dateStr);
-        if (idx >= 0) {
-          attendedDates.splice(idx, 1);
-          td.classList.remove('bg-green-400');
-          td.textContent = '';
-        } else {
-          attendedDates.push(dateStr);
-          td.classList.add('bg-green-400');
-          td.textContent = '✔';
-        }
+    // 組裝 attendanceRecords 格式 { studentName: { dates: [ ... ] }, ... }
+    const attendanceRecords = {};
+    checkedBoxes.forEach(cb => {
+      attendanceRecords[cb.value] = { dates: dateRange };
+    });
 
-        // 存回資料結構
-        regionData[student] = { dates: attendedDates };
+    messageDiv.style.color = "black";
+    messageDiv.textContent = "正在送出點名資料，請稍候...";
+
+    try {
+      // 送出點名資料
+      let res = await fetch(scriptUrl, {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+          type: "saveAttendance",
+          region,
+          attendanceRecords
+        })
       });
+      let data = await res.json();
+      if(!data.success){
+        messageDiv.style.color = "red";
+        messageDiv.textContent = "點名儲存失敗：" + data.message;
+        return;
+      }
 
-      tr.appendChild(td);
-    });
+      // 送出更新統計
+      res = await fetch(scriptUrl, {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({
+          type: "updateAttendanceSummary",
+          region,
+          attendanceRecords
+        })
+      });
+      data = await res.json();
+      if(!data.success){
+        messageDiv.style.color = "red";
+        messageDiv.textContent = "更新出席統計失敗：" + data.message;
+        return;
+      }
 
-    tbody.appendChild(tr);
+      messageDiv.style.color = "green";
+      messageDiv.textContent = "點名與統計更新成功！";
+
+    } catch(err) {
+      messageDiv.style.color = "red";
+      messageDiv.textContent = "發生錯誤：" + err.message;
+    }
   });
 
-  attendanceHistoryTable.appendChild(tbody);
-}
-
-// 當選擇地區時載入點名表格
-attendanceRegion.addEventListener('change', () => {
-  const region = attendanceRegion.value;
-  attendanceMessage.textContent = '';
-  if (!region) {
-    attendanceHistoryTable.innerHTML = '';
-    saveAttendanceBtn.disabled = true;
-    return;
-  }
-  saveAttendanceBtn.disabled = false;
-  renderAttendanceHistory(region);
-});
-
-// 當起始或結束日期變動時重新渲染
-startDateInput.addEventListener('change', () => {
-  sessionStorage.setItem('attendanceStartDate', startDateInput.value);
-  if (attendanceRegion.value) renderAttendanceHistory(attendanceRegion.value);
-});
-
-endDateInput.addEventListener('change', () => {
-  sessionStorage.setItem('attendanceEndDate', endDateInput.value);
-  if (attendanceRegion.value) renderAttendanceHistory(attendanceRegion.value);
-});
-
-
-// 儲存點名資料，並顯示1秒後自動消失訊息
-saveAttendanceBtn.addEventListener('click', async () => {
-  const region = attendanceRegion.value;
-  if (!region) {
-    attendanceMessage.style.color = 'red';
-    attendanceMessage.textContent = '請選擇地區';
-    return;
-  }
-  try {
-    // **標準化：每個學生的 dates 去重且從小到大排序（舊到新）**
-    if (attendanceRecords[region]) {
-      for (const student in attendanceRecords[region]) {
-        const rec = attendanceRecords[region][student];
-        if (rec && Array.isArray(rec.dates)) {
-          rec.dates = Array.from(new Set(rec.dates))
-            .sort((a, b) => a.localeCompare(b)); // 舊到新
-        }
-      }
-    }
-
-    const payload = {
-      region,
-      attendanceRecords: attendanceRecords[region] || {}
-    };
-    const res = await fetch('https://script.google.com/macros/s/AKfycbykskbzkuXI0TVuZnZmS3kfVjLLMD1OFppPgjp8Mrs5PK9VPpaRxMOZpO6ESArkVMyx/exec?type=attendance', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-  if (res.ok) {
-  attendanceMessage.style.color = 'green';
-  attendanceMessage.textContent = data.message || '點名資料已儲存';
-  setTimeout(() => {
-    attendanceMessage.textContent = '';
-  }, 1000);
-
-  // 👉 若目前正在統計頁，並且是同一地區，就觸發刷新
-  if (systemSelect.value === 'statistics' && statisticsRegion.value === region) {
-    statisticsRegion.dispatchEvent(new Event('change'));
-  }
-}
-
-    else {
-      attendanceMessage.style.color = 'red';
-      attendanceMessage.textContent = data.message || '儲存失敗';
-    }
-  } catch {
-    attendanceMessage.style.color = 'red';
-    attendanceMessage.textContent = '網路錯誤，請稍後再試';
-  }
-});
-
-// ----------------- 出席統計 -----------------
-
-// ✅ 儲存每位學生的已繳費次數（期數）在 sessionStorage
-function getPaidPhaseKey(region, student) {
-  return `paidPhase_${region}_${student}`;
-}
-function getPaidPhase(region, student) {
-  return parseInt(sessionStorage.getItem(getPaidPhaseKey(region, student)) || '0');
-}
-function incrementPaidPhase(region, student) {
-  const current = getPaidPhase(region, student);
-  sessionStorage.setItem(getPaidPhaseKey(region, student), current + 1);
-}
-
-// 👉 新增切換顯示模式的下拉選單
-if (!document.getElementById('attendanceDisplayMode')) {
-  const select = document.createElement('select');
-  select.id = 'attendanceDisplayMode';
-  select.className = 'border rounded p-1 mb-3';
-  select.innerHTML = `
-    <option value="current">當期（最多 8 次）</option>
-    <option value="all">顯示全部</option>
-  `;
-  statisticsSection.insertBefore(select, statisticsSection.querySelector('.table-wrapper'));
-  select.addEventListener('change', () => {
-    statisticsRegion.dispatchEvent(new Event('change'));
-    renderGlobalStatisticsReminder();
-  });
-}
-// 地區統計渲染
-statisticsRegion.addEventListener('change', async () => {
-  const region = statisticsRegion.value;
-  if (!region) {
-    statisticsTableBody.innerHTML = '';
-    statisticsReminder.innerHTML = '';
-    return;
-  }
-
-  //顯示表格當前顯示模式(所有/當期)
-  const mode = document.getElementById('attendanceDisplayMode')?.value || 'current';
-
-  // 取得該地區點名資料
-  const data = await fetchAttendanceRecords(region);
-
-  // 有效學生名單
-  const validStudents = new Set(studentsByRegion[region] || []);
-
-  // ✅ 清理不存在該地區資料中的學生的 paidPhase session 資料
-  for (const key in sessionStorage) {
-    if (key.startsWith('paidPhase_')) {
-      const [, regionKey, studentKey] = key.split('_');
-      if (regionKey === region && (!data[studentKey] || !Array.isArray(data[studentKey].dates))) {
-        sessionStorage.removeItem(key);
-      }
-    }
-  }
-
-  // 整理統計資料
-const rows = [];
-
-for (const student in data) {
-  if (!validStudents.has(student)) continue;
-
-  const rawDates = data[student]?.dates || [];
-  const sortedDates = Array.from(new Set(rawDates)).sort((a, b) => a.localeCompare(b));
-
-  // ✅ 自動修正 paidPhase
-  const paidPhaseKey = getPaidPhaseKey(region, student);
-  let paidPhase = getPaidPhase(region, student);
-  const maxPaidPhase = Math.floor(sortedDates.length / 8);
-  if (paidPhase > maxPaidPhase) {
-    paidPhase = maxPaidPhase;
-    sessionStorage.setItem(paidPhaseKey, paidPhase);
-  }
-
-  const start = paidPhase * 8;
-  const displayDates = sortedDates.slice(start);
-
-  const count = displayDates.length;
-
-  rows.push({ student, displayDates, count, paidPhase });
-}
-
-
-rows.sort((a, b) => a.student.localeCompare(b.student));
-
-  // 更新表頭標籤文字
-  const headerRow = document.querySelector('#statisticsTable thead tr');
-  const phaseLabel = mode === 'all' ? '出席次數（📘 全部）' : '出席次數（📘 當期）';
-  if (headerRow && headerRow.children.length >= 3) {
-    headerRow.children[2].textContent = phaseLabel;
-  }
-
-  // 渲染統計表格
-let html = '';
-rows.forEach(r => {
-  const currentCount = r.displayDates.length;
-  let extraNotice = "";
-
-  if (mode === 'current') {
-    if (currentCount === 8) {
-      extraNotice = "<br><span class='text-yellow-600 font-semibold'>⚠️ 已達 8 次，請盡快繳費</span>";
-    } else if (currentCount > 8) {
-      extraNotice = "<br><span class='text-red-600 font-semibold'>❗ 已超過 8 次，請盡快繳費</span>";
-    }
-  }
-
-  const countDisplay = mode === 'all'
-    ? `${r.count} 次<br><span class='text-sm text-gray-500'>📘 全部資料</span>`
-    : `📘 第 ${r.paidPhase + 1} 期<br>🟢 已出席 ${currentCount} 次${extraNotice}`;
-
-  html += `
-    <tr>
-      <td class="border px-2 py-1">${r.student}</td>
-      <td class="border px-2 py-1">${r.displayDates.join('<br>') || '—'}</td>
-      <td class="border px-2 py-1">${countDisplay}</td>
-    </tr>
-  `;
-});
-statisticsTableBody.innerHTML = html;
-renderGlobalStatisticsReminder();
-
-});
-// 👉 處理按下已繳費按鈕：僅刷新畫面，顯示最新8筆（不影響資料）
-function handlePayment(region, student) {
-  const data = attendanceRecords[region]?.[student]?.dates || [];
-
-  // ✅ 去重 + 舊到新排序
-  const uniqueSortedDates = Array.from(new Set(data)).sort((a, b) => a.localeCompare(b));
-
-  const paidPhase = getPaidPhase(region, student);
-  const start = paidPhase * 8;
-
-  // ✅ 正確抓出目前當期的資料
-  const currentPhaseDates = uniqueSortedDates.slice(start, start + 8);
-
-  if (currentPhaseDates.length < 8) {
-    alert(`${student} 尚未上滿 8 節課，無法進入下一期`);
-    return;
-  }
-
-  if (confirm(`確定 ${student} 已繳費？系統將顯示下一期（8 次）出席記錄。`)) {
-    incrementPaidPhase(region, student);
-    statisticsRegion.dispatchEvent(new Event('change'));
-    renderGlobalStatisticsReminder();
-  }
-}
-
-
-// 🔔 全區提醒 + 已繳費按鈕顯示在紅色區塊中（僅當期判斷）
-async function renderGlobalStatisticsReminder() {
-  const globalReminder = document.getElementById("globalStatisticsReminder");
-
-  try {
-    const allData = await fetch('https://script.google.com/macros/s/AKfycbykskbzkuXI0TVuZnZmS3kfVjLLMD1OFppPgjp8Mrs5PK9VPpaRxMOZpO6ESArkVMyx/exec?type=attendance', { credentials: 'include' }).then(r => r.json());
-    const mode = document.getElementById('attendanceDisplayMode')?.value || 'current';
-
-    if (mode === 'all') {
-      globalReminder.innerHTML = "";
-      globalReminder.classList.add("hidden");
-      return;
-    }
-
-    let reminders = [];
-
-    for (const region in allData) {
-      const regionData = allData[region] || {};
-
-      for (const student in regionData) {
-        const rawDates = regionData[student]?.dates || [];
-
-        // ✅ 去重並排序（舊到新）
-        const uniqueSortedDates = Array.from(new Set(rawDates)).sort((a, b) => a.localeCompare(b));
-
-        const paidPhaseKey = getPaidPhaseKey(region, student);
-        let paidPhase = getPaidPhase(region, student);
-        const maxPaidPhase = Math.floor(uniqueSortedDates.length / 8);
-
-        // ✅ 若繳費期數超過最大期數，自動退回
-        if (paidPhase > maxPaidPhase) {
-          paidPhase = maxPaidPhase;
-          sessionStorage.setItem(paidPhaseKey, paidPhase);
-        }
-
-        // ✅ 取得當期出席記錄
-        const start = paidPhase * 8;
-        const displayDates = uniqueSortedDates.slice(start);
-
-        if (displayDates.length >= 7) {
-          reminders.push({
-            region,
-            student,
-            count: displayDates.length
-          });
-        }
-      }
-    }
-
-    if (reminders.length > 0) {
-      globalReminder.innerHTML = `
-        <strong class="block mb-2">⚠️ 全區出席次數達 7 次以上名單：</strong>
-        ${reminders.map(r => `
-          <div class="mb-1 flex items-center gap-2">
-            <span>${r.region} - ${r.student}（${r.count} 次）</span>
-            <button class="bg-indigo-600 text-white px-2 py-0.5 text-sm rounded hover:bg-indigo-700"
-                    onclick="handlePayment('${r.region}', '${r.student}')">
-              已繳費（顯示下一期）
-            </button>
-          </div>
-        `).join('')}
-      `;
-    } else {
-      globalReminder.innerHTML = "<div>目前無需提醒名單</div>";
-    }
-
-    globalReminder.classList.remove("hidden");
-  } catch (err) {
-    globalReminder.innerHTML = "<div>⚠️ 資料載入失敗</div>";
-    globalReminder.classList.remove("hidden");
-    console.error(err);
-  }
-}
-
-// 功能切換選單監聽
-systemSelect.addEventListener("change", () => {
-  const val = systemSelect.value;
-
-  attendanceSection.style.display = val === 'attendance' ? 'block' : 'none';
-  statisticsSection.style.display = val === 'statistics' ? 'block' : 'none';
-  attendanceMessage.textContent = '';
-
-  // 若切換至統計頁，刷新提醒
-  if (val === 'statistics') {
-  renderGlobalStatisticsReminder();
-  if (statisticsRegion.value) {
-    statisticsRegion.dispatchEvent(new Event('change'));
-  }
-}
-
-});
-// 新增學生按鈕 DOM 元素
-const newStudentNameInput = document.getElementById('newStudentName');
-const newStudentRegionSelect = document.getElementById('newStudentRegion');
-const addStudentBtn = document.getElementById('addStudentBtn');
-
-
-addStudentBtn.addEventListener('click', async () => {
-  const name = newStudentNameInput.value.trim();
-  const region = newStudentRegionSelect.value;
-
-  if (!name) {
-    alert('請輸入學生姓名');
-    return;
-  }
-  if (!region) {
-    alert('請選擇學生地區');
-    return;
-  }
-
-  try {
-    const res = await fetch('https://script.google.com/macros/s/AKfycbykskbzkuXI0TVuZnZmS3kfVjLLMD1OFppPgjp8Mrs5PK9VPpaRxMOZpO6ESArkVMyx/exec', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'saveAttendance',  type: 'deleteStudent',  type: 'addStudent',  region, studentName: name })
-    });
-
-    const data = await res.json();
-    if (res.ok) {
-      alert(data.message || '新增成功');
-
-      // 更新本地資料結構
-      if (!studentsByRegion[region]) studentsByRegion[region] = [];
-      studentsByRegion[region].push(name);
-
-      if (attendanceRegion.value === region) {
-        renderAttendanceHistory(region);
-      }
-
-      newStudentNameInput.value = '';
-      newStudentRegionSelect.value = '';
-    } else {
-      alert(data.message || '新增失敗');
-    }
-  } catch (e) {
-    alert('新增失敗，請稍後再試');
-    console.error(e);
-  }
-});
-
-
-// 頁面初始化
-checkLoginStatus();
-renderGlobalStatisticsReminder();
-setDefaultDates(); 
-
+  // 初始載入
+  loadRegions();
 </script>
+
 </body>
 </html>
-
